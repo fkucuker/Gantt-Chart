@@ -25,6 +25,7 @@ def create_app(config_class=Config):
     from .routes.subtasks import subtasks_bp
     from .routes.gantt import gantt_bp
     from .routes.notifications import notifications_bp
+    from .routes.users import users_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(activities_bp, url_prefix="/api/activities")
@@ -32,6 +33,7 @@ def create_app(config_class=Config):
     app.register_blueprint(subtasks_bp, url_prefix="/api")
     app.register_blueprint(gantt_bp, url_prefix="/api")
     app.register_blueprint(notifications_bp, url_prefix="/api")
+    app.register_blueprint(users_bp, url_prefix="/api")
 
     # Health check endpoint
     @app.route("/api/health")

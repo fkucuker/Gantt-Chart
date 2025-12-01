@@ -128,6 +128,36 @@ export interface PatchSubTaskDTO {
   progress_percent?: number
 }
 
+// User Management DTOs
+export interface CreateUserDTO {
+  email: string
+  password: string
+  full_name: string
+  role?: UserRole
+  is_active?: boolean
+}
+
+export interface UpdateUserDTO {
+  email?: string
+  full_name?: string
+  role?: UserRole
+  is_active?: boolean
+}
+
+export interface ChangePasswordDTO {
+  old_password?: string  // Required for non-admin users
+  new_password: string
+}
+
+export interface UsersResponse {
+  users: User[]
+}
+
+export interface UserResponse {
+  user: User
+  message?: string
+}
+
 // FAZ-2: Notification types
 export type NotificationType = 
   | 'TASK_CREATED'

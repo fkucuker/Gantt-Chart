@@ -29,6 +29,12 @@ const routes: RouteRecordRaw[] = [
         name: 'activity-detail',
         component: () => import('@/pages/ActivityDetailPage.vue'),
         props: true
+      },
+      {
+        path: 'users',
+        name: 'users',
+        component: () => import('@/pages/UsersPage.vue'),
+        meta: { title: 'Kullanıcı Yönetimi' }
       }
     ]
   },

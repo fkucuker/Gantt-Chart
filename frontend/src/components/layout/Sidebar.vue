@@ -30,15 +30,30 @@ interface NavItem {
   hasSubmenu?: boolean
 }
 
-const navItems: NavItem[] = [
-  {
-    name: 'activities',
-    label: 'Faaliyetler',
-    icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
-    path: '/activities',
-    hasSubmenu: true
+const navItems = computed<NavItem[]>(() => {
+  const items: NavItem[] = [
+    {
+      name: 'activities',
+      label: 'Faaliyetler',
+      icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
+      path: '/activities',
+      hasSubmenu: true
+    }
+  ]
+  
+  // Kullanıcı yönetimi sadece giriş yapanlar için (admin tüm işlemleri, diğerleri sadece kendi profilini görebilir)
+  if (authStore.isAuthenticated) {
+    items.push({
+      name: 'users',
+      label: 'Kullanıcılar',
+      icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+      path: '/users',
+      hasSubmenu: false
+    })
   }
-]
+  
+  return items
+})
 
 const isActive = computed(() => (name: string) => {
   return route.name === name || route.path.startsWith(`/${name}`)
