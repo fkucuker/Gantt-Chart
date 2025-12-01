@@ -27,6 +27,18 @@ class SubTaskStatus(PyEnum):
     OVERDUE = "OVERDUE"
 
 
+class NotificationType(PyEnum):
+    """Notification type enumeration."""
+    TASK_CREATED = "TASK_CREATED"
+    TASK_UPDATED = "TASK_UPDATED"
+    TASK_DELETED = "TASK_DELETED"
+    TASK_ASSIGNED = "TASK_ASSIGNED"
+    TASK_COMPLETED = "TASK_COMPLETED"
+    TASK_OVERDUE = "TASK_OVERDUE"
+    DATE_CHANGED = "DATE_CHANGED"
+    STATUS_CHANGED = "STATUS_CHANGED"
+
+
 def enum_values_callable(enum_class):
     """Return enum values instead of names for database storage."""
     return [e.value for e in enum_class]
@@ -57,6 +69,12 @@ class User(db.Model):
     )
     assigned_subtasks: Mapped[List["SubTask"]] = relationship(
         "SubTask", back_populates="assignee", foreign_keys="SubTask.assignee_id"
+    )
+    received_notifications: Mapped[List["Notification"]] = relationship(
+        "Notification", back_populates="target_user", foreign_keys="Notification.target_user_id"
+    )
+    created_notifications: Mapped[List["Notification"]] = relationship(
+        "Notification", back_populates="created_by", foreign_keys="Notification.created_by_id"
     )
 
     def to_dict(self, include_email: bool = False) -> dict:
@@ -176,9 +194,16 @@ class SubTask(db.Model):
 
     def to_dict(self, include_assignee: bool = False) -> dict:
         """Convert subtask to dictionary representation."""
-        # Calculate effective status (OVERDUE if past due and not completed)
+        # Calculate effective status based on progress and completion
         effective_status = self.status
-        if self.status != SubTaskStatus.COMPLETED and self.end_date < date.today():
+        
+        # 1. Auto-complete: If progress is 100% OR status is COMPLETED → show as COMPLETED
+        if self.progress_percent == 100 or self.status == SubTaskStatus.COMPLETED:
+            effective_status = SubTaskStatus.COMPLETED
+        
+        # 2. Auto-overdue: If end_date passed AND not fully completed → show as OVERDUE
+        # Task is fully completed only if BOTH progress=100% AND status=COMPLETED
+        elif self.end_date < date.today():
             effective_status = SubTaskStatus.OVERDUE
 
         data = {
@@ -196,5 +221,60 @@ class SubTask(db.Model):
         }
         if include_assignee and self.assignee:
             data["assignee"] = self.assignee.to_dict()
+        return data
+
+
+class Notification(db.Model):
+    """Notification model - FAZ-2 feature for user notifications."""
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    activity_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("activities.id", ondelete="SET NULL"), nullable=True
+    )
+    subtask_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("subtasks.id", ondelete="SET NULL"), nullable=True
+    )
+    target_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relationships
+    target_user: Mapped["User"] = relationship(
+        "User", back_populates="received_notifications", foreign_keys=[target_user_id]
+    )
+    created_by: Mapped[Optional["User"]] = relationship(
+        "User", back_populates="created_notifications", foreign_keys=[created_by_id]
+    )
+    activity: Mapped[Optional["Activity"]] = relationship("Activity")
+    subtask: Mapped[Optional["SubTask"]] = relationship("SubTask")
+
+    def to_dict(self, include_relations: bool = False) -> dict:
+        """Convert notification to dictionary representation."""
+        data = {
+            "id": self.id,
+            "type": self.type,
+            "message": self.message,
+            "activity_id": self.activity_id,
+            "subtask_id": self.subtask_id,
+            "target_user_id": self.target_user_id,
+            "created_by_id": self.created_by_id,
+            "is_read": self.is_read,
+            "created_at": self.created_at.isoformat(),
+        }
+        if include_relations:
+            if self.created_by:
+                data["created_by"] = self.created_by.to_dict()
+            if self.activity:
+                data["activity"] = {"id": self.activity.id, "name": self.activity.name}
+            if self.subtask:
+                data["subtask"] = {"id": self.subtask.id, "title": self.subtask.title}
         return data
 

@@ -3,6 +3,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import ThemeToggle from './ThemeToggle.vue'
+import NotificationBell from './NotificationBell.vue'
 
 defineEmits<{
   'toggle-sidebar': []
@@ -49,6 +50,8 @@ const pageTitle = computed(() => {
 
     <!-- Right: Actions -->
     <div class="flex items-center space-x-2">
+      <!-- FAZ-2: Notification Bell -->
+      <NotificationBell />
       <ThemeToggle />
     </div>
   </header>

@@ -67,6 +67,12 @@ function navigateToActivity(activityId: number) {
   router.push(`/activities/${activityId}`)
 }
 
+function editActivity(activity: any, event: Event) {
+  event.stopPropagation()
+  // Navigate to activities page with edit query param
+  router.push({ path: '/activities', query: { edit: activity.id.toString() } })
+}
+
 function handleLogout() {
   authStore.logout()
   router.push('/login')
@@ -186,36 +192,49 @@ watch(() => authStore.isAuthenticated, (isAuth) => {
             </div>
 
             <!-- Activity Items -->
-            <button
+            <div
               v-for="activity in activityStore.activities"
               :key="activity.id"
-              @click="navigateToActivity(activity.id)"
-              class="w-full flex items-center px-3 py-2 rounded-md text-left transition-colors group"
+              class="w-full flex items-center justify-between px-3 py-2 rounded-md text-left transition-colors group/activity cursor-pointer"
               :class="[
                 currentActivityId === activity.id
                   ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
                   : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-700 dark:hover:text-slate-300'
               ]"
               :title="activity.name"
+              @click="navigateToActivity(activity.id)"
             >
-              <!-- Activity Icon -->
-              <svg
-                class="w-3.5 h-3.5 flex-shrink-0 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+              <div class="flex items-center flex-1 min-w-0">
+                <!-- Activity Icon -->
+                <svg
+                  class="w-3.5 h-3.5 flex-shrink-0 mr-2"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                  />
+                </svg>
+                <span class="text-xs font-medium truncate">
+                  {{ activity.name }}
+                </span>
+              </div>
+              <!-- Edit Button (admin/editor only) -->
+              <button
+                v-if="authStore.canEdit"
+                @click="editActivity(activity, $event)"
+                class="p-1 text-slate-400 hover:text-amber-500 opacity-0 group-hover/activity:opacity-100 transition-all"
+                title="Düzenle"
               >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                />
-              </svg>
-              <span class="text-xs font-medium truncate">
-                {{ activity.name }}
-              </span>
-            </button>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            </div>
 
             <!-- View All Link -->
             <button

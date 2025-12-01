@@ -1,6 +1,10 @@
 <!-- /frontend/src/components/gantt/GanttChart.vue -->
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+/**
+ * GanttChart Component
+ * FAZ-2: Added scale override buttons
+ */
+import { computed, ref, watch } from 'vue'
 import type { Activity, Topic, SubTask, GanttScale, UserRole, CreateTopicDTO, CreateSubTaskDTO, UpdateTopicDTO, UpdateSubTaskDTO } from '@/types'
 import { useActivityStore } from '@/store/activityStore'
 import GanttTimeline from './GanttTimeline.vue'
@@ -18,6 +22,31 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+const emit = defineEmits<{
+  'update:scale': [scale: GanttScale]
+}>()
+
+// FAZ-2: Local scale override (null means use prop value)
+const scaleOverride = ref<GanttScale | null>(null)
+
+// Effective scale (override or prop)
+const effectiveScale = computed(() => scaleOverride.value ?? props.scale)
+
+// Watch for prop changes to reset override when data refreshes
+watch(() => props.scale, () => {
+  // Keep override if user has set it
+})
+
+// FAZ-2: Scale override handlers
+function setScale(newScale: GanttScale) {
+  scaleOverride.value = newScale
+  emit('update:scale', newScale)
+}
+
+function resetScale() {
+  scaleOverride.value = null
+}
 
 const activityStore = useActivityStore()
 
@@ -292,22 +321,12 @@ const formattedToday = computed(() => {
   })
 })
 
-// Scale label
-const scaleLabel = computed(() => {
-  switch (props.scale) {
-    case 'day': return 'Gün'
-    case 'week': return 'Hafta'
-    case 'month': return 'Ay'
-    default: return props.scale
-  }
-})
-
 // Duration text
 const durationText = computed(() => {
   const days = totalDays.value
-  if (props.scale === 'week') {
+  if (effectiveScale.value === 'week') {
     return `${Math.ceil(days / 7)} hafta (${days} gün)`
-  } else if (props.scale === 'month') {
+  } else if (effectiveScale.value === 'month') {
     return `${Math.ceil(days / 30)} ay (${days} gün)`
   }
   return `${days} gün`
@@ -349,12 +368,53 @@ function getTopicById(topicId: number): Topic | undefined {
       </div>
 
       <div class="flex items-center space-x-3">
-        <!-- Scale indicator -->
-        <div class="flex items-center space-x-2">
-          <span class="text-xs text-slate-500 dark:text-slate-400">Ölçek:</span>
-          <span class="px-2 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded">
-            {{ scaleLabel }}
-          </span>
+        <!-- FAZ-2: Scale selector buttons -->
+        <div class="flex items-center space-x-1">
+          <span class="text-xs text-slate-500 dark:text-slate-400 mr-1">Ölçek:</span>
+          <button
+            @click="setScale('day')"
+            :class="[
+              'px-2.5 py-1 text-xs font-medium rounded transition-colors',
+              effectiveScale === 'day'
+                ? 'bg-blue-500 text-white'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+            ]"
+          >
+            Gün
+          </button>
+          <button
+            @click="setScale('week')"
+            :class="[
+              'px-2.5 py-1 text-xs font-medium rounded transition-colors',
+              effectiveScale === 'week'
+                ? 'bg-blue-500 text-white'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+            ]"
+          >
+            Hafta
+          </button>
+          <button
+            @click="setScale('month')"
+            :class="[
+              'px-2.5 py-1 text-xs font-medium rounded transition-colors',
+              effectiveScale === 'month'
+                ? 'bg-blue-500 text-white'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+            ]"
+          >
+            Ay
+          </button>
+          <!-- Reset to auto button -->
+          <button
+            v-if="scaleOverride !== null"
+            @click="resetScale"
+            class="ml-1 p-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+            title="Otomatik ölçeğe dön"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
         </div>
 
         <!-- Add Topic Button (Admin/Editor only) -->
@@ -475,7 +535,7 @@ function getTopicById(topicId: number): Topic | undefined {
           <GanttTimeline
             :start-date="startDate"
             :end-date="endDate"
-            :scale="scale"
+            :scale="effectiveScale"
           />
 
           <!-- Today Marker -->
@@ -505,6 +565,7 @@ function getTopicById(topicId: number): Topic | undefined {
                   :can-edit="currentUserRole === 'admin' || currentUserRole === 'editor'"
                   @mouseenter="showTooltip($event, subtask)"
                   @mouseleave="hideTooltip"
+                  @dblclick="openEditSubTaskModal"
                 />
               </div>
             </template>

@@ -11,7 +11,8 @@ import type {
   CreateTopicDTO,
   UpdateTopicDTO,
   CreateSubTaskDTO,
-  UpdateSubTaskDTO
+  UpdateSubTaskDTO,
+  PatchSubTaskDTO
 } from '@/types'
 import { activitiesApi } from '@/services/activitiesApi'
 
@@ -253,6 +254,30 @@ export const useActivityStore = defineStore('activity', () => {
     }
   }
 
+  /**
+   * FAZ-2: Patch SubTask - for drag & drop date changes
+   * Does not set loading state to keep UI responsive during drag
+   */
+  async function patchSubTask(subtaskId: number, data: PatchSubTaskDTO): Promise<SubTask | null> {
+    error.value = null
+
+    try {
+      const response = await activitiesApi.patchSubTask(subtaskId, data)
+      // Update in gantt data
+      if (ganttData.value) {
+        const index = ganttData.value.subtasks.findIndex(st => st.id === subtaskId)
+        if (index !== -1) {
+          ganttData.value.subtasks[index] = response.subtask
+        }
+      }
+      return response.subtask
+    } catch (err: any) {
+      error.value = err.response?.data?.error || 'Alt görev güncellenemedi'
+      // Revert optimistic update if needed
+      return null
+    }
+  }
+
   return {
     activities,
     currentActivity,
@@ -271,6 +296,7 @@ export const useActivityStore = defineStore('activity', () => {
     createSubTask,
     updateSubTask,
     deleteSubTask,
+    patchSubTask,
     clearError
   }
 })

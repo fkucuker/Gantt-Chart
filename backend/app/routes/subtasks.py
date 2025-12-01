@@ -8,6 +8,7 @@ from flask import Blueprint, request, jsonify
 from ..db import db
 from ..models import Activity, Topic, SubTask, SubTaskStatus, UserRole
 from ..auth.utils import login_required, role_required, get_current_user
+from ..services.notification_service import notification_service
 
 subtasks_bp = Blueprint("subtasks", __name__)
 
@@ -184,6 +185,7 @@ def patch_subtask(subtask_id: int):
     """
     PATCH /api/subtasks/:id
     Partial update - mainly for drag & drop date changes and status updates
+    Creates notifications for assignee when dates or status change (FAZ-2)
     """
     subtask = db.session.get(SubTask, subtask_id)
     current_user = get_current_user()
@@ -198,17 +200,30 @@ def patch_subtask(subtask_id: int):
         return jsonify({"error": "Bu alt görevi güncelleme yetkiniz yok"}), 403
 
     data = request.get_json()
+    
+    # Store old values for notification
+    old_start = subtask.start_date.isoformat() if subtask.start_date else None
+    old_end = subtask.end_date.isoformat() if subtask.end_date else None
+    old_status = subtask.status.value if subtask.status else None
+    dates_changed = False
+    status_changed = False
 
     # Only process provided fields
     if "start_date" in data:
         try:
-            subtask.start_date = datetime.strptime(data["start_date"], "%Y-%m-%d").date()
+            new_start = datetime.strptime(data["start_date"], "%Y-%m-%d").date()
+            if subtask.start_date != new_start:
+                dates_changed = True
+            subtask.start_date = new_start
         except ValueError:
             return jsonify({"error": "Tarih formatı YYYY-MM-DD olmalı"}), 400
 
     if "end_date" in data:
         try:
-            subtask.end_date = datetime.strptime(data["end_date"], "%Y-%m-%d").date()
+            new_end = datetime.strptime(data["end_date"], "%Y-%m-%d").date()
+            if subtask.end_date != new_end:
+                dates_changed = True
+            subtask.end_date = new_end
         except ValueError:
             return jsonify({"error": "Tarih formatı YYYY-MM-DD olmalı"}), 400
 
@@ -217,7 +232,10 @@ def patch_subtask(subtask_id: int):
 
     if "status" in data:
         try:
-            subtask.status = SubTaskStatus(data["status"])
+            new_status = SubTaskStatus(data["status"])
+            if subtask.status != new_status:
+                status_changed = True
+            subtask.status = new_status
         except ValueError:
             return jsonify({"error": "Geçersiz durum değeri"}), 400
 
@@ -228,6 +246,26 @@ def patch_subtask(subtask_id: int):
         subtask.progress_percent = progress
 
     db.session.commit()
+
+    # Create notifications (FAZ-2)
+    # Notify assignee if dates changed (e.g., from drag & drop)
+    if dates_changed and subtask.assignee_id:
+        notification_service.notify_date_changed(
+            subtask=subtask,
+            target_user_id=subtask.assignee_id,
+            changed_by_id=current_user.id,
+            old_start=old_start,
+            old_end=old_end
+        )
+    
+    # Notify assignee if status changed
+    if status_changed and subtask.assignee_id:
+        notification_service.notify_status_changed(
+            subtask=subtask,
+            target_user_id=subtask.assignee_id,
+            changed_by_id=current_user.id,
+            new_status=subtask.status.value
+        )
 
     return jsonify({"subtask": subtask.to_dict(include_assignee=True)}), 200
 

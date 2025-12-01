@@ -1,17 +1,28 @@
 <!-- /frontend/src/pages/ActivitiesPage.vue -->
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useActivityStore } from '@/store/activityStore'
 import { useAuthStore } from '@/store/authStore'
-import type { Activity, CreateActivityDTO } from '@/types'
+import type { Activity, CreateActivityDTO, UpdateActivityDTO } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
 const activityStore = useActivityStore()
 const authStore = useAuthStore()
 
 const showCreateModal = ref(false)
 const newActivity = ref<CreateActivityDTO>({
+  name: '',
+  description: '',
+  start_date: '',
+  end_date: ''
+})
+
+// Edit modal state
+const showEditModal = ref(false)
+const editingActivity = ref<Activity | null>(null)
+const editActivity = ref<UpdateActivityDTO>({
   name: '',
   description: '',
   start_date: '',
@@ -60,13 +71,65 @@ async function handleDeleteActivity(activity: Activity) {
   }
 }
 
+// Open edit modal
+function openEditModal(activity: Activity) {
+  editingActivity.value = activity
+  editActivity.value = {
+    name: activity.name,
+    description: activity.description || '',
+    start_date: activity.start_date,
+    end_date: activity.end_date
+  }
+  showEditModal.value = true
+}
+
+// Close edit modal
+function closeEditModal() {
+  showEditModal.value = false
+  editingActivity.value = null
+  editActivity.value = { name: '', description: '', start_date: '', end_date: '' }
+}
+
+// Update activity
+async function handleUpdateActivity() {
+  if (!editingActivity.value || !editActivity.value.name || !editActivity.value.start_date || !editActivity.value.end_date) {
+    return
+  }
+
+  const result = await activityStore.updateActivity(editingActivity.value.id, editActivity.value)
+  if (result) {
+    closeEditModal()
+  }
+}
+
 // Get today's date in YYYY-MM-DD format
 const today = computed(() => {
   return new Date().toISOString().split('T')[0]
 })
 
-onMounted(() => {
-  activityStore.fetchActivities()
+// Check for edit query param
+function checkEditQuery() {
+  const editId = route.query.edit
+  if (editId && authStore.canEdit) {
+    const activity = activityStore.activities.find(a => a.id === parseInt(editId as string))
+    if (activity) {
+      openEditModal(activity)
+      // Clear the query param
+      router.replace({ path: '/activities' })
+    }
+  }
+}
+
+onMounted(async () => {
+  await activityStore.fetchActivities()
+  checkEditQuery()
+})
+
+// Watch for query changes
+watch(() => route.query.edit, () => {
+  if (activityStore.activities.length > 0) {
+    checkEditQuery()
+  }
 })
 </script>
 
@@ -165,11 +228,23 @@ onMounted(() => {
 
           <!-- Actions -->
           <div
-            v-if="authStore.isAdmin"
+            v-if="authStore.canEdit"
             class="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
             @click.stop
           >
+            <!-- Edit Button -->
             <button
+              @click="openEditModal(activity)"
+              class="p-1.5 text-slate-400 hover:text-amber-500 transition-colors"
+              title="Düzenle"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+            <!-- Delete Button (admin only) -->
+            <button
+              v-if="authStore.isAdmin"
               @click="handleDeleteActivity(activity)"
               class="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
               title="Sil"
@@ -312,6 +387,109 @@ onMounted(() => {
                 class="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
               >
                 {{ activityStore.loading ? 'Oluşturuluyor...' : 'Oluştur' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Edit Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showEditModal"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      >
+        <!-- Backdrop -->
+        <div
+          class="absolute inset-0 bg-black/50"
+          @click="closeEditModal"
+        />
+
+        <!-- Modal -->
+        <div class="relative w-full max-w-lg bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6">
+          <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
+            Faaliyeti Düzenle
+          </h3>
+
+          <form @submit.prevent="handleUpdateActivity" class="space-y-4">
+            <!-- Name -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Faaliyet Adı *
+              </label>
+              <input
+                v-model="editActivity.name"
+                type="text"
+                required
+                class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Proje adı"
+              />
+            </div>
+
+            <!-- Description -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                Açıklama
+              </label>
+              <textarea
+                v-model="editActivity.description"
+                rows="3"
+                class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                placeholder="Faaliyet açıklaması (opsiyonel)"
+              />
+            </div>
+
+            <!-- Dates -->
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Başlangıç Tarihi *
+                </label>
+                <input
+                  v-model="editActivity.start_date"
+                  type="date"
+                  required
+                  class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Bitiş Tarihi *
+                </label>
+                <input
+                  v-model="editActivity.end_date"
+                  type="date"
+                  required
+                  :min="editActivity.start_date"
+                  class="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <!-- Error -->
+            <div
+              v-if="activityStore.error"
+              class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+            >
+              <p class="text-sm text-red-600 dark:text-red-400">{{ activityStore.error }}</p>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex justify-end space-x-3 pt-4">
+              <button
+                type="button"
+                @click="closeEditModal"
+                class="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                İptal
+              </button>
+              <button
+                type="submit"
+                :disabled="activityStore.loading"
+                class="px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-400 text-white font-medium rounded-lg transition-colors"
+              >
+                {{ activityStore.loading ? 'Kaydediliyor...' : 'Kaydet' }}
               </button>
             </div>
           </form>

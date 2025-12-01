@@ -128,3 +128,35 @@ export interface PatchSubTaskDTO {
   progress_percent?: number
 }
 
+// FAZ-2: Notification types
+export type NotificationType = 
+  | 'TASK_CREATED'
+  | 'TASK_UPDATED'
+  | 'TASK_DELETED'
+  | 'TASK_ASSIGNED'
+  | 'TASK_COMPLETED'
+  | 'TASK_OVERDUE'
+  | 'DATE_CHANGED'
+  | 'STATUS_CHANGED'
+
+export interface Notification {
+  id: number
+  type: NotificationType
+  message: string
+  activity_id: number | null
+  subtask_id: number | null
+  target_user_id: number
+  created_by_id: number | null
+  is_read: boolean
+  created_at: string
+  // Populated relations
+  created_by?: User
+  activity?: { id: number; name: string }
+  subtask?: { id: number; title: string }
+}
+
+export interface NotificationsResponse {
+  notifications: Notification[]
+  unread_count: number
+}
+
