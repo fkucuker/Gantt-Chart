@@ -81,12 +81,13 @@ Tek komut ile otomatik olarak:
 - **Dark / Light mod** desteği
 - Admin One tarzı modern dashboard arayüzü
 
-### FAZ-2 (Planlanan)
+### FAZ-2 (Etkileşim & UX) ✅
 
-- Drag & Drop ile tarih güncelleme
-- Bildirim sistemi
-- Rol bazlı UI kontrolü
-- Manuel scale ayarı
+- **Drag & Drop** ile tarih güncelleme (sadece Admin/Editor)
+- **Bildirim sistemi** - gerçek zamanlı bildirimler
+- **Rol bazlı UI kontrolü** - yetkisiz işlemler devre dışı
+- Notification API ve frontend entegrasyonu
+- SubTask PATCH endpoint'i ile tarih güncelleme
 
 ---
 
@@ -298,6 +299,13 @@ npm run dev
 |--------|----------|----------|
 | GET | `/api/activities/:id/gantt` | Gantt verisi |
 
+### Notifications
+
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| GET | `/api/notifications` | Kullanıcı bildirimleri |
+| PATCH | `/api/notifications/:id` | Okundu işaretle |
+
 ### Health Check
 
 | Method | Endpoint | Açıklama |
@@ -492,4 +500,4 @@ MIT License
 ---
 
 **Geliştirici:** Gantt Chart Team  
-**Versiyon:** 1.0.0-FAZ1
+**Versiyon:** 2.0.0-FAZ2
