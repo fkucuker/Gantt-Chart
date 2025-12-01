@@ -1,0 +1,44 @@
+---
+alwaysApply: true
+---
+# Cursor production rules for the Gantt Chart Based Activity Planning Application.
+# These rules must always be respected for all code and documentation contributions.
+
+# 1. Directory annotation:
+#    - Always indicate the file and folder path when providing code (e.g., `/frontend/src/components/gantt/GanttChart.vue için kod:`)
+
+# 2. Coding & UI language:
+#    - Code language must be English, but UI text labels/messages can be in Turkish.
+
+# 3. Version & Roadmap discipline:
+#    - Do not implement FAZ-2 features before FAZ-1 completion (no mixture in the same commit).
+
+# 4. Output completeness:
+#    - Code examples must run or build with minimal effort; mark incomplete or stub parts with `TODO`.
+
+# 5. Style Guide (Frontend):
+#    - Use `<script setup lang="ts">` and the Composition API for all `.vue` files.
+#    - Explicit typings (`interface`/`type`) for all major data models (`Activity`, `Topic`, `SubTask`, etc).
+
+# 6. Testing practice:
+#    - Write tests for core features (backend: pytest; frontend: vitest).
+#    - Examples: status → color mapping, Gantt scale calculation, drag delta logic, theme toggling.
+
+# 7. Theme & UX:
+#    - Sade, modern, kullanıcı dostu arayüz (Admin One tarzı, gereksiz animasyon ve ekstra UI lib YOK).
+#    - Support Dark/Light mode using Tailwind's class strategy, with user preference in `localStorage`.
+
+# 8. Backend conventions:
+#    - Folder structure, ORM (SQLAlchemy 2.x), migration, and API endpoints as described in the project specification.
+#    - All models and endpoints must enforce described constraints and enumeration values.
+#    - Use Python 3.13 and PostgreSQL 16.11 as specified.
+
+# 9. Git workflow:
+#    - Only merge features into `dev`, then merge to `main` after full test & docker up OK.
+#    - Never commit directly to `main`.
+#    - Use the described branch, commit, and tag naming conventions.
+
+# 10. Documentation:
+#    - Maintain a detailed README (setup, version matrix, endpoints, roles, FAZ explanations, theme usage notes).
+
+# Violation of these cursor rules is not allowed. If in doubt, prefer explicitness and code clarity per this document.

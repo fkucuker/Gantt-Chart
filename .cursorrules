@@ -1,0 +1,418 @@
+# .cursorrules
+# Proje: Gantt Chart Tabanlı Faaliyet Planlama Uygulaması
+# Stack: Python Flask + PostgreSQL (Backend), Vue 3 + TypeScript + Vite + Tailwind (Frontend), Docker-compose, Git
+# UI: Admin One (Vue 3 + Tailwind 4) tarzı basit admin dashboard, Dark / Light mod destekli
+
+###############################################################################
+# 0. VERSİYON MATRİSİ (SABİT & UYUMLU SÜRÜMLER)
+###############################################################################
+
+Python:         3.13.9          # docker base: python:3.13-slim
+Node.js (LTS):  24.11.x         # docker base: node:24
+PostgreSQL:     16.11           # docker image: postgres:16.11
+
+Flask:          3.1.2
+SQLAlchemy:     2.0.44
+Alembic:        1.17.2
+psycopg2:       2.9.11
+gunicorn:       23.0.0
+Flask-CORS:     5.x
+python-dotenv:  1.x
+
+Vue:            3.5.25
+Vite:           7.2.4
+TypeScript:     5.9.3
+Pinia:          3.0.4
+Vue Router:     4.6.3
+TailwindCSS:    4.1.17
+Axios:          1.13.2
+
+Docker images:
+- python:3.13-slim
+- postgres:16.11
+- node:24
+- nginx:alpine
+
+###############################################################################
+# 1. GENEL MİMARİ
+###############################################################################
+
+/backend → Flask REST API  
+/frontend → Vue 3 + TypeScript SPA (Vite + Tailwind)  
+/infra   → docker-compose + deploy dosyaları  
+
+Kod dili İngilizce, UI metinleri Türkçe olabilir.  
+Tasarım: sade, hafif, modern, kullanıcı dostu. Ağır animasyonlardan kaçın.
+
+###############################################################################
+# 2. GELİŞTİRME ROADMAP
+###############################################################################
+
+FAZ-1 → MVP
+- Activity • Topic • SubTask modelleri
+- Gantt endpoint (Activity → Topic → SubTask JSON)
+- Kullanıcı rolleri: admin / editor / viewer
+- SubTask status enum: PLANNED | IN_PROGRESS | COMPLETED | OVERDUE
+- Tooltip (hover ile detay)
+- Admin One benzeri layout (sidebar + topbar) + dark/light mod temeli
+
+FAZ-2 → Etkileşim & UX
+- Drag & Drop ile tarih güncelleme → PATCH /api/subtasks/:id
+- Notification modeli + API (DB’de kayıt)
+- Rol bazlı UI kontrolü (drag, CRUD yetkileri)
+- Scale ayarı otomatik + manuel override butonları (day/week/month)
+
+FAZ-1 bitmeden FAZ-2’e geçme.
+
+###############################################################################
+# 3. BACKEND KURALLARI (FLASK + POSTGRESQL)
+###############################################################################
+
+Python 3.13 • PostgreSQL 16.11  
+ORM: SQLAlchemy 2.x • Migration: Alembic 1.17.x  
+
+Minimum paketler:
+- Flask==3.1.2
+- SQLAlchemy==2.0.44
+- Alembic==1.17.2
+- psycopg2==2.9.11
+- Flask-CORS~=5.0
+- python-dotenv~=1.0
+- gunicorn==23.0.0
+
+Dizin yapısı:
+/backend/app/
+  ├── __init__.py              # create_app()
+  ├── db.py                    # Postgres bağlantısı
+  ├── config.py
+  ├── models.py
+  ├── schemas.py               # (opsiyonel)
+  ├── auth/
+  │    ├── __init__.py
+  │    ├── routes.py           # login, me, logout (opsiyonel)
+  │    └── utils.py            # role_required, token doğrulama
+  ├── routes/
+  │    ├── activities.py
+  │    ├── topics.py
+  │    ├── subtasks.py
+  │    ├── gantt.py
+  │    └── notifications.py    # FAZ-2
+  ├── services/
+       ├── gantt_service.py
+       └── notification_service.py
+/migrations/  # Alembic
+/wsgi.py
+
+Modeller (zorunlu alanlar):
+
+- User
+  - id, email (unique), password_hash, full_name
+  - role: Enum("admin","editor","viewer")
+  - is_active, created_at, updated_at
+
+- Activity
+  - id, name, description (ops), start_date, end_date
+  - owner_id (FK → users.id)
+  - created_at, updated_at
+
+- Topic
+  - id, activity_id (FK), title, description (ops)
+  - created_at, updated_at
+
+- SubTask
+  - id, topic_id (FK), title, description (ops)
+  - start_date, end_date
+  - status: Enum("PLANNED","IN_PROGRESS","COMPLETED","OVERDUE")
+  - assignee_id (FK → users.id, ops)
+  - progress_percent (0–100, default 0)
+  - created_at, updated_at
+
+- Notification (FAZ-2)
+  - id, type (string), message (short text)
+  - activity_id (ops), subtask_id (ops)
+  - target_user_id (FK → users.id)
+  - created_by_id (FK → users.id, ops)
+  - is_read (bool, default False)
+  - created_at
+
+API’ler (minimum):
+
+- Auth:
+  - POST /api/auth/login
+  - GET  /api/auth/me
+
+- Activities:
+  - GET  /api/activities
+  - POST /api/activities
+  - GET  /api/activities/:id
+  - PUT  /api/activities/:id
+  - DELETE /api/activities/:id
+
+- Topics:
+  - GET  /api/activities/:activity_id/topics
+  - POST /api/activities/:activity_id/topics
+  - PUT  /api/topics/:id
+  - DELETE /api/topics/:id
+
+- SubTasks:
+  - GET  /api/topics/:topic_id/subtasks
+  - POST /api/topics/:topic_id/subtasks
+  - PUT  /api/subtasks/:id
+  - PATCH /api/subtasks/:id   # Drag & drop tarih güncellemesi, status değişimi
+  - DELETE /api/subtasks/:id
+
+- Gantt:
+  - GET /api/activities/:id/gantt
+    Dönen JSON:
+    {
+      "activity": {...},
+      "topics": [...],
+      "subtasks": [...],
+      "scale": "day" | "week" | "month",
+      "today": "YYYY-MM-DD"
+    }
+
+- Notifications (FAZ-2):
+  - GET   /api/notifications      # current_user için
+  - PATCH /api/notifications/:id  # is_read güncelle
+
+İş kuralları:
+- SubTask: start_date ve end_date zorunlu, start_date <= end_date
+- Activity tarih aralığı ile SubTask tarihleri uyuşmazsa en azından uyarı döndür
+- status != COMPLETED ve end_date < today ise OVERDUE hesaplanmalı (en azından response’ta yansıt)
+
+###############################################################################
+# 4. FRONTEND KURALLARI (VUE 3 + TYPESCRIPT + ADMIN ONE TEMA)
+###############################################################################
+
+Node LTS: 24.x, Vite 7.x  
+Paketler:
+- vue:          ^3.5.25
+- vue-router:   ^4.6.3
+- pinia:        ^3.0.4
+- typescript:   ^5.9.3
+- vite:         ^7.2.4
+- tailwindcss:  ^4.1.17
+- axios:        ^1.13.2
+
+Kod stili:
+- `<script setup lang="ts">` formatı ZORUNLU
+- Composition API kullanılacak
+- Tipler interface/type ile açık yazılmalı (örneğin `Activity`, `Topic`, `SubTask` tipleri)
+
+Dizin yapısı:
+/frontend/src/
+  ├── main.ts
+  ├── router/index.ts
+  ├── store/
+  │    ├── authStore.ts
+  │    └── activityStore.ts
+  ├── services/
+  │    ├── apiClient.ts
+  │    ├── authApi.ts
+  │    ├── activitiesApi.ts
+  │    └── notificationsApi.ts
+  ├── components/gantt/
+  │    ├── GanttChart.vue
+  │    ├── GanttTimeline.vue
+  │    ├── GanttTaskBar.vue
+  │    ├── GanttTooltip.vue
+  │    ├── GanttTodayMarker.vue
+  ├── components/layout/
+  │    ├── AppShell.vue         # Admin One benzeri layout
+  │    ├── Sidebar.vue
+  │    ├── Topbar.vue
+  │    └── ThemeToggle.vue
+  ├── pages/
+       ├── LoginPage.vue
+       ├── ActivitiesPage.vue
+       └── ActivityDetailPage.vue
+
+### 4.1 UI TEMPLATE KULLANIMI (ADMIN ONE TARZI)
+
+- Görsel referans: Admin One Vue 3 + Tailwind 4 dashboard
+  - Solda dar bir sidebar
+  - Üstte sabit bir topbar
+  - Orta alanda içerik / kartlar
+- Tasarım ilkeleri:
+  - Sade, geniş boşluklu (padding ve whitespace kullan)
+  - Kart tabanlı görünüm (`rounded-xl`, `shadow-sm`, `border`, `bg-surface` tarzı)
+  - Tailwind utility sınıflarıyla çözümler; ekstra UI kütüphanesi ekleme
+- Dark / Light tema:
+  - Tailwind `darkMode: 'class'` yaklaşımı kullanılacak.
+  - `html` veya `body` elementine `class="dark"` eklenerek dark moda geçilecek.
+  - Tema tercihi `localStorage`'da tutulmalı (ör: `theme="light" | "dark" | "system"`).
+  - `ThemeToggle.vue`:
+    - Kullanıcı ikonlu buton ile light/dark arasında geçiş yapabilmeli.
+    - İstenirse “system” seçeneği eklenebilir ama zorunlu değil.
+- Renk paleti:
+  - Açık moda yakın:
+    - Arkaplan: `bg-slate-50` / `bg-slate-100`
+    - Kartlar: `bg-white`, border: `border-slate-200`
+    - Metin: `text-slate-800`
+  - Dark mod:
+    - Arkaplan: `bg-slate-900`
+    - Kartlar: `bg-slate-800`, border: `border-slate-700`
+    - Metin: `text-slate-100`
+  - Gantt bar renkleri status’e göre:
+    - PLANNED    → `bg-sky-400 dark:bg-sky-500`
+    - IN_PROGRESS→ `bg-blue-500 dark:bg-blue-400`
+    - COMPLETED  → `bg-emerald-500 dark:bg-emerald-400 opacity-70`
+    - OVERDUE    → `bg-rose-500 dark:bg-rose-400`
+- Tipografi:
+  - Admin One benzeri sade font (örneğin system-ui, Inter, Nunito vb.)
+  - Başlıklar için `text-lg font-semibold`, alt başlıklar için `text-sm text-slate-500`
+
+### 4.2 GANTT BİLEŞENLERİ
+
+- `GanttChart.vue`:
+  - Props: activity, topics, subtasks, scale, today, currentUserRole
+  - Yapı:
+    - Üstte küçük özet bar:
+      - “Bugün: DD.MM.YYYY”
+      - “Toplam süre: X gün / Y hafta / Z ay”
+      - Scale seçim butonları (day/week/month) — FAZ-2’de manuel override
+    - Altında Timeline + Task bar’lar
+    - Dark/light modda arkaplan ve grid çizgileri tonlanmalı (çok keskin olmamalı)
+
+- `GanttTimeline.vue`:
+  - Scale’e göre kolonlar:
+    - day: her gün bir sütun
+    - week: haftalık bloklar
+    - month: aylık bloklar
+  - `border-slate-200 dark:border-slate-700` gibi yumuşak grid çizgileri
+
+- `GanttTaskBar.vue`:
+  - SubTask → x-offset ve width hesaplar
+  - Renk status + geçmiş/bugün/gelecek durumuna göre ayarlanır:
+    - Geçmiş görevler → `opacity-60`
+    - Bugün aralığında olan → border highlight veya glow sınırlı
+    - Gelecek görevler → full opacity
+  - Drag & Drop (FAZ-2):
+    - Sadece admin/editor rolünde aktif.
+    - Drag bitince yeni tarihleri hesaplayıp API PATCH çağrısı yapılır.
+
+- `GanttTooltip.vue`:
+  - Hover’da görünen küçük kart:
+    - title, date range, status (Türkçe label), progress %, assignee name, description
+  - Tailwind ile `rounded-lg shadow-md px-3 py-2 text-xs` gibi sade stil
+  - Dark modda: `bg-slate-800 text-slate-100`
+
+- `GanttTodayMarker.vue`:
+  - Timeline üzerinde bugüne denk gelen dikey çizgi.
+  - `border-l-2 border-rose-400` veya benzeri.
+  - Dark modda da görünür olmasına dikkat (kontrast).
+
+### 4.3 SCALE MANTIĞI
+
+- totalDays = (activity.end_date - activity.start_date)
+- totalDays ≤ 30         → "day"
+- 30 < totalDays ≤ 180   → "week"
+- totalDays > 180        → "month"
+- Varsayılan otomatik, FAZ-2’de kullanıcı değiştirebilir.
+
+###############################################################################
+# 5. DOCKER & INFRA
+###############################################################################
+
+docker-compose servisleri:
+- api  (Flask backend)
+- web  (Vue build + nginx)
+- db   (PostgreSQL 16.11)
+
+Backend Dockerfile:
+- FROM python:3.13-slim
+- Sistem bağımlılıkları: libpq-dev, build-essential vb.
+- pip install:
+  - Flask==3.1.2, SQLAlchemy==2.0.44, Alembic==1.17.2, psycopg2==2.9.11
+  - Flask-CORS, python-dotenv, gunicorn
+- entrypoint:
+  - `alembic upgrade head`
+  - `gunicorn -b 0.0.0.0:5000 wsgi:app`
+
+Frontend Dockerfile:
+- Build stage: FROM node:24
+  - npm install
+  - npm run build
+- Run stage: FROM nginx:alpine
+  - /dist → /usr/share/nginx/html
+  - SPA fallback: `try_files $uri /index.html`
+
+PostgreSQL servisi:
+- image: postgres:16.11
+- env:
+  - POSTGRES_DB=gantt_app
+  - POSTGRES_USER=gantt_user
+  - POSTGRES_PASSWORD=strongpassword
+- volume:
+  - pgdata:/var/lib/postgresql/data
+
+ENV örnekleri:
+- backend.env:
+  - DATABASE_URL=postgresql+psycopg2://gantt_user:strongpassword@db:5432/gantt_app
+  - FLASK_ENV=production
+  - SECRET_KEY=...
+- frontend.env:
+  - VITE_API_BASE_URL=http://api:5000/api
+
+###############################################################################
+# 6. TEST & KALİTE
+###############################################################################
+
+Backend (pytest):
+- Activity/Topic/SubTask CRUD
+- Role bazlı izinler (admin/editor/viewer)
+- Tarih validasyonu
+- Gantt endpoint (scale, today)
+- PATCH /api/subtasks/:id + Notification oluşumu
+
+Frontend (vitest önerilir):
+- GanttChart render
+- GanttTaskBar status → renk mapping
+- Drag tarih delta hesap fonksiyonu
+- ThemeToggle → light/dark class kontrolü
+
+README (zorunlu):
+- Kurulum (docker-compose up)
+- Versiyon matrisi özeti
+- API endpoint listesi
+- FAZ-1 / FAZ-2 açıklamaları
+- Roller ve yetkiler
+- Dark/Light tema kullanım notu
+
+###############################################################################
+# 7. CURSOR ÜRETİM KURALLARI
+###############################################################################
+
+- Kod üretirken klasör yolu her zaman belirtilmeli:
+  - Örn: `/frontend/src/components/gantt/GanttChart.vue için kod:`
+- Kod İngilizce, yorumlar Türkçe olabilir.
+- FAZ-1 tamamlanmadan FAZ-2 kodu yazılmamalı (aynı commit’te karışmasın).
+- Çıktı mümkün olduğunca “çalışır” örnek olacak şekilde olmalı; eksik yerler `TODO` ile işaretlenebilir.
+
+###############################################################################
+# 8. GIT SÜRÜM KULLANIM STRATEJİSİ
+###############################################################################
+
+- `main` → her zaman stabil & deploy edilebilir
+- `dev`  → aktif geliştirme
+- özellik → `feature/<ozellik-adi>`
+- bugfix  → `fix/<problem-adi>`
+
+Merge:
+- `feature/*` → `dev` içine merge
+- `dev` → testler & docker up OK ise `main`’e merge
+- `main`’e direkt commit YASAK
+
+Commit mesaj formatı:
+- `feat: drag and drop for subtasks`
+- `fix: status color mapping`
+- `refactor: simplify activity store`
+- `docs: add API usage examples`
+- `test: add gantt scale tests`
+
+Release tag:
+- FAZ-1 bitişi: `v1.0.0-FAZ1`
+- FAZ-2 bitişi: `v2.0.0-FAZ2`
+
+# → Bu kural seti finaldir. Geliştirme, Git ve bu UI tasarım ilkelerine uygun ilerlemelidir.
