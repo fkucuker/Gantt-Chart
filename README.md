@@ -499,5 +499,5 @@ MIT License
 
 ---
 
-**Geliştirici:** Gantt Chart Team  
+**Geliştirici:** fkucuker 
 **Versiyon:** 2.0.0-FAZ2
